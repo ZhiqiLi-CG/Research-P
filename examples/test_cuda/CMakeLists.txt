@@ -10,11 +10,13 @@ zqPhysics_Deps(${project_name})
 ###############################################
 # Add the project 
 ###############################################
-project(${project_name})
+project(${project_name} LANGUAGES CXX CUDA)
 
 file(GLOB  SOURCES
 	"./*.h"
 	"./*.cpp"
+	"./*.cu"
+	"./*.hpp"
 )
 add_executable(${project_name} ${SOURCES})
 ###############################################
