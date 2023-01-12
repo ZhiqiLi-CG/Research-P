@@ -7,7 +7,6 @@
 */
 /***********************************************************/
 
-//	This example shows how to use GLUTWindow and FBO
 
 #include <iostream>
 #include <GL/glew.h>
