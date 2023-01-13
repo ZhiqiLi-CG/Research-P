@@ -1,3 +1,6 @@
 [submodule "Research-M"]
 	path = Research-M
 	url = git@github.com:ZhiqiLi-CG/Research-M.git
+[submodule "deps"]
+	path = deps
+	url = git@github.com:ZhiqiLi-CG/zqLibraryDeps.git
