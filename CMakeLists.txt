@@ -36,31 +36,20 @@ endif()
 ###############################################
 # Config data path
 ###############################################
-set(MATH_DATA_PATH "${CMAKE_SOURCE_DIR}/Research-M/data")
+set(PHYSICS_DATA_PATH "${CMAKE_SOURCE_DIR}/data")
 configure_file(
-	"${CMAKE_SOURCE_DIR}/Research-M/examples/math_data_path.h.in" 
-	"${PROJECT_BINARY_DIR}/math_data_path.h"
+	"${CMAKE_SOURCE_DIR}/examples/physics_data_path.h.in" 
+	"${PROJECT_BINARY_DIR}/physics_data_path.h"
 	@ONLY)
-message(STATUS "${PROJECT_BINARY_DIR}/data_path.h created,\n DATA_PATH=${MATH_DATA_PATH}")
+message(STATUS "${PROJECT_BINARY_DIR}/physics_path.h created,\n DATA_PATH=${PHYSICS_DATA_PATH}")
 
 ###############################################
 # Options and config
 ###############################################
 include(ResearchP/ResearchP.cmake)
 include_directories(${ResearchP_INCLUDE_DIRS})
-message(STATUS "==============================")
-# ---------- CUDA ----------
-if(yzLib_ENABLE_CUDA)
-	find_package(CUDA  REQUIRED)
+Set_ResearchP_Env()
 
-	if(CUDA_FOUND)
-		message(STATUS "CUDA version: ${CUDA_VERSION}")
-		include_directories(${CUDA_INCLUDE_DIRS})  
-		link_directories(${CUDA_TOOLKIT_ROOT_DIR}/lib/x64)
-	else()
-		message(ERROR "CUDA not found, you need to install CUDA, or disable yzLib_ENABLE_CUDA")
-	endif()
-endif()
 ###############################################
 # Example Projects
 ###############################################

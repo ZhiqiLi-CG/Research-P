@@ -7,6 +7,7 @@
 #include "cublas_v2.h"
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
+#include <thrust/host_vector.h>
 #include "Eigen/Dense"
 #include "Eigen/Geometry"
 #include "Common.h"

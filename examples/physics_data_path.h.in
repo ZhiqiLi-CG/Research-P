@@ -1,0 +1,6 @@
+﻿#ifndef PHYSICS_DATA_PATH_H
+#define PHYSICS_DATA_PATH_H
+
+const char* physics_data_path = "@PHYSICS_DATA_PATH@";
+
+#endif

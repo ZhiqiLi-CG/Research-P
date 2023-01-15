@@ -9,8 +9,18 @@
 
 
 #include <iostream>
-#include <GL/glew.h>
-#include <GL/glut.h>
+#include<zqPhysics/physics_grid.h>
+#include<zqPhysics/physics_neighbor_search.h>
+#include<zqPhysics/physics_process.h>
+#include<zqPhysics/geometry_init.h>
+#include<zqPhysics/physics_object.h>
+#include<zqPhysics/codim1_sph_object.h>
+
+#include<zqPhysics/physics_simulation.h>
+#include<zqPhysics/physics_sph_kernel.h>
+#include<zqPhysics/physics_codim1_sph.h>
+#include<zqPhysics/physics_boundary.h>
+
 #include<zqVisualization/visualization_opengl.h>
 #include<zqVisualization/visualization_persistent_homology.h>
 #include<zqBasicUtils/utils_timer.h>

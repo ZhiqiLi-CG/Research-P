@@ -1,0 +1,21 @@
+/***********************************************************/
+/**	\file
+	\brief		Config of ResearchP
+	\details	
+	\author		Zhiqi Li
+	\date		1/23/2023
+*/
+/***********************************************************/
+#ifndef __RESEARCHP_CONFIG_H__
+#define __RESEARCHP_CONFIG_H__
+
+
+//#cmakedefine RESEARCHM_ENABLE_WINDOWS
+//#cmakedefine RESEARCHM_ENABLE_Eigen
+//#cmakedefine RESEARCHM_ENABLE_MKL
+//#cmakedefine RESEARCHM_ENABLE_GLUT
+//#cmakedefine RESEARCHM_ENABLE_GLEW
+
+#cmakedefine RESEARCHP_ENABLE_CUDA
+
+#endif
