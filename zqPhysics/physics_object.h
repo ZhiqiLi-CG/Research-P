@@ -76,7 +76,7 @@ namespace zq{ namespace physics{
 		}
 	}
 	template<int side>
-	void printArrayArray(const Array<Array<int>, side>& var, const char* promp, bool force) {
+	void printArrayArray(const Array<Array<int, side>>& var, const char* promp, bool force) {
 		if (force) {
 			Array<Array<int>> new_var = var;
 			printf("%s", promp);

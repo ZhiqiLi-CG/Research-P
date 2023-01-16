@@ -124,9 +124,16 @@ namespace zq{ namespace physics{
 			VecD MaxPosition,
 			VecD  MinPosition
 		) {
+			
 #ifdef  RESEARCHP_ENABLE_CUDA
-			SPHKernel* tem_kernel = new SPHKernel(t_r);
-			cpyh2d(t_kernel, tem_kernel, sizeof(SPHKernel));
+			if constexpr (side == DEVICE) {
+				SPHKernel* tem_kernel = new SPHKernel(t_r);
+				cudaNew(t_kernel, sizeof(SPHKernel));
+				cpyh2d(t_kernel, tem_kernel, sizeof(SPHKernel));
+			}
+			else {
+				t_kernel = new SPHKernel(t_r);
+			}
 #else
 			t_kernel = new SPHKernel(t_r);
 #endif
@@ -150,13 +157,18 @@ namespace zq{ namespace physics{
 			// S -> Vol 
 //			updateVol(0); 
 			updateInitVol(0);  printRealArray<side>(vol, "Init Vol", false);
+			printf("1");
 			updateM(0);  printRealArray<side>(m, "Init Mass", false);
+			printf("2");
 			updateS(0);
+			printf("3");
 			vol_0 = vol_b = calculateVolume<d,side>(x, e, s);
+			printf("4");
 			updateG(0);
 			printf("P");
 		}
 		void update(real dt) {
+			
 			getPtr();
 #ifdef  RESEARCHP_ENABLE_CUDA
 			thrust::fill(f.begin(), f.end(), VecD());
@@ -180,7 +192,7 @@ namespace zq{ namespace physics{
 			updateVelocity(dt); printVecArray<side, d>(v, "test velocity", false);
 			updatePosition(dt); printVecArray<side, d>(x, "test Position", false);
 			updateNb(); printArrayArray<side>(nbs, "test nbs", false);
-
+			
 			updateFrame(dt); printMatArray<side, d>(e, "test frame", false);
 			updateG(dt); printMatArray<side, d-1>(g, "test g", false);
 			updateH(dt); printRealArray<side>(h, "test ori_h", false);
@@ -188,6 +200,7 @@ namespace zq{ namespace physics{
 			vol_b = calculateVolume<d, side>(x, e, s);
 		}
 	public:
+		
 		void getPtr() {
 			/// first, resize,
 			v.resize(x.size());
@@ -268,17 +281,17 @@ namespace zq{ namespace physics{
 		void updateLowercaseGamma(real dt) {
 			/// why + ?
 			TransferToLocal();
-			zq::utils::Calc_Each(
-				[GM_ptr, gamma_0, gamma_a] __device__ __host__(const int idx)->real {
-					return gamma_0 - gamma_a * GM_ptr[idx];
-				},
-			 gm
+			auto phi = [GM_ptr, gamma_0, gamma_a] __device__ __host__(const int idx)->real {
+				return gamma_0 - gamma_a * GM_ptr[idx];
+			};
+			zq::utils::Calc_Each<decltype(phi), side>(
+				phi,
+				gm
 			);
 		}
 		void updatePressure(real dt) {
 			TransferToLocal();
-			zq::utils::Calc_Each(
-				[x_ptr, e_ptr, g_ptr, vol_ptr, h_ptr, nbs_ptr_ptr, nbs_num_ptr, t_kernel, alpha_h, h_0, alpha_k, gm_ptr, alpha_d, v_ptr] __device__ __host__(const int idx)->real {
+			auto phi = [x_ptr, e_ptr, g_ptr, vol_ptr, h_ptr, nbs_ptr_ptr, nbs_num_ptr, t_kernel, alpha_h, h_0, alpha_k, gm_ptr, alpha_d, v_ptr] __device__ __host__(const int idx)->real {
 				real k = calculateCurvature<d>(
 					idx,
 					x_ptr,
@@ -289,7 +302,7 @@ namespace zq{ namespace physics{
 					nbs_ptr_ptr,
 					nbs_num_ptr,
 					t_kernel
-				);
+					);
 				///printf("k:%f\t", k);
 				return alpha_h * (h_ptr[idx] / h_0 - 1) + alpha_k * gm_ptr[idx] * k + alpha_d *
 					calculateDiv<d>(
@@ -303,15 +316,16 @@ namespace zq{ namespace physics{
 						nbs_ptr_ptr,
 						nbs_num_ptr,
 						t_kernel
-					);
-			},
+						);
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi,
 				p
 				);
 		}
 		void updateAdvectedHeight(real dt) {
 			TransferToLocal();
-			zq::utils::Calc_Each(
-				[dt, x_ptr, e_ptr, g_ptr, vol_ptr, v_ptr, h_ptr, ah_ptr, t_kernel, nbs_ptr_ptr, nbs_num_ptr, this] __device__ __host__(const int idx)->real {
+			auto phi = [dt, x_ptr, e_ptr, g_ptr, vol_ptr, v_ptr, h_ptr, ah_ptr, t_kernel, nbs_ptr_ptr, nbs_num_ptr, this] __device__ __host__(const int idx)->real {
 				return ah_ptr[idx] - ah_ptr[idx] *
 					calculateDiv<d>(
 						idx,
@@ -324,8 +338,10 @@ namespace zq{ namespace physics{
 						nbs_ptr_ptr,
 						nbs_num_ptr,
 						t_kernel
-					)* dt;
-				},
+						) * dt;
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi,
 				ah
 				);
 		}
@@ -334,9 +350,8 @@ namespace zq{ namespace physics{
 			auto vo_ij = [vo_ptr] __device__ __host__(const int i, const int j)->real {
 				return vo_ptr[j] - vo_ptr[i];
 			};
-			zq::utils::Calc_Each(
-				[dt, vo_ij, t_kernel, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, g_ptr, vol_ptr, h_ptr, alpha_c, vo_ptr]__device__ __host__(const int idx)->real {
-				real new_vol = codim1LapSPH<decltype(vo_ij),d>(
+			auto phi = [dt, vo_ij, t_kernel, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, g_ptr, vol_ptr, h_ptr, alpha_c, vo_ptr]__device__ __host__(const int idx)->real {
+				real new_vol = codim1LapSPH<decltype(vo_ij), d>(
 					idx,
 					nbs_num_ptr[idx],
 					nbs_ptr_ptr[idx],
@@ -347,9 +362,11 @@ namespace zq{ namespace physics{
 					h_ptr,
 					vo_ij,
 					t_kernel
-				);
+					);
 				return alpha_c * dt * new_vol + vo_ptr[idx];
-			}
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
 			, vo
 				);
 		}
@@ -360,10 +377,9 @@ namespace zq{ namespace physics{
 				(const int i, const int j)->real {
 				return GM_ptr[j] - GM_ptr[i];
 			};
-			zq::utils::Calc_Each(
-				[GM_ptr, alpha_c, dt, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, g_ptr, vol_ptr, h_ptr, GM_ij, t_kernel]
-			__device__ __host__
-			(const int idx)->real {
+			auto phi = [GM_ptr, alpha_c, dt, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, g_ptr, vol_ptr, h_ptr, GM_ij, t_kernel]
+				__device__ __host__
+				(const int idx)->real {
 				return GM_ptr[idx] + alpha_c * dt * codim1LapSPH<decltype(GM_ij), d>(
 					idx,
 					nbs_num_ptr[idx],
@@ -375,35 +391,39 @@ namespace zq{ namespace physics{
 					h_ptr,
 					GM_ij,
 					t_kernel
-				);
-			},
-			GM
+					);
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi,
+				GM
 				);
 		}
 		void updateExternalForce(real dt) {
 			TransferToLocal();
-			zq::utils::Calc_Each(
-				[vol_0, vol_b, p_0, f_ptr, m_ptr, gravity_vec, s_ptr, e_ptr]__device__ __host__(const int idx)->VecD {
+			auto phi = [vol_0, vol_b, p_0, f_ptr, m_ptr, gravity_vec, s_ptr, e_ptr]__device__ __host__(const int idx)->VecD {
 				real p_b = (vol_0 / vol_b) * p_0;
 				//printf("%f %f %f\n,",p_0,p_b, (p_b - p_0) * s_ptr[idx] / 1000000);
-				VecD newForce = f_ptr[idx] + m_ptr[idx] * gravity_vec +(p_b - p_0) * s_ptr[idx] * (e_ptr[idx]).col(d - 1) / 1000;
+				VecD newForce = f_ptr[idx] + m_ptr[idx] * gravity_vec + (p_b - p_0) * s_ptr[idx] * (e_ptr[idx]).col(d - 1) / 1000;
 				return newForce;
-			}
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
 			, f
 				);
 		}
 		void updateVorticityForce(real dt) {
 			TransferToLocal();
-			zq::utils::Calc_Each(
-				[nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, f_ptr, vo_ptr] __device__ __host__(const int idx) ->VecD {
+			auto phi = [nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, f_ptr, vo_ptr] __device__ __host__(const int idx) ->VecD {
 				for (int k = 0; k < nbs_num_ptr[idx]; k++) {
 					int j = nbs_ptr_ptr[idx][k];
 					VecD rij = x_ptr[idx] - x_ptr[j];
 					VecD rt_ij = planeVector<d>(projectPlane<d>(rij, e_ptr[idx]), e_ptr[idx]);
-					VecD newForce = f_ptr[idx] - cross(rt_ij,vo_ptr[j] * e_ptr[j].col(d - 1));
+					VecD newForce = f_ptr[idx] - cross(rt_ij, vo_ptr[j] * e_ptr[j].col(d - 1));
 					return newForce;
-		}
-	}
+				}
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
 			, f
 				);
 }
@@ -412,10 +432,9 @@ namespace zq{ namespace physics{
 			auto p_f = [p_ptr] __device__ __host__(const int i) -> real {
 				return p_ptr[i];
 			};
-			zq::utils::Calc_Each(
-				[p_f, x_ptr, f_ptr, vol_ptr, h_ptr, nbs_num_ptr, nbs_ptr_ptr, e_ptr, g_ptr, t_kernel] __device__ __host__(const int idx)->VecD {
+			auto phi = [p_f, x_ptr, f_ptr, vol_ptr, h_ptr, nbs_num_ptr, nbs_ptr_ptr, e_ptr, g_ptr, t_kernel] __device__ __host__(const int idx)->VecD {
 				VecD newForce = f_ptr[idx] + 2 * vol_ptr[idx] *
-					codim1GradSymmSPH<decltype(p_f),d>(
+					codim1GradSymmSPH<decltype(p_f), d>(
 						idx,
 						nbs_num_ptr[idx],
 						nbs_ptr_ptr[idx],
@@ -426,9 +445,11 @@ namespace zq{ namespace physics{
 						h_ptr,
 						p_f,
 						t_kernel
-					);
+						);
 				return newForce;
-			}
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
 			, f
 				);
 		}
@@ -437,10 +458,9 @@ namespace zq{ namespace physics{
 			auto gm_f = [gm_ptr] __device__ __host__(const int i)->real {
 				return gm_ptr[i];
 			};
-			zq::utils::Calc_Each(
-				[f_ptr, vol_ptr, h_ptr, gm_f, t_kernel, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, g_ptr] __device__ __host__(const int idx)->VecD {
+			auto phi = [f_ptr, vol_ptr, h_ptr, gm_f, t_kernel, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, g_ptr] __device__ __host__(const int idx)->VecD {
 				return  f_ptr[idx] + (vol_ptr[idx] / h_ptr[idx]) *
-					codim1GradDiffSPH<decltype(gm_f),d>(
+					codim1GradDiffSPH<decltype(gm_f), d>(
 						idx,
 						nbs_num_ptr[idx],
 						nbs_ptr_ptr[idx],
@@ -451,8 +471,10 @@ namespace zq{ namespace physics{
 						h_ptr,
 						gm_f,
 						t_kernel
-					);
-			}
+						);
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
 			, f
 				);
 		}
@@ -462,9 +484,8 @@ namespace zq{ namespace physics{
 				real value = -dot(x_ptr[i] - x_ptr[j], e_ptr[i].col(d - 1));
 				return value;
 			};
-			zq::utils::Calc_Each(
-				[cap_coef,nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, g_ptr, vol_ptr, h_ptr, xt_f, t_kernel, f_ptr, gm_ptr] __device__ __host__(const int idx)->VecD {
-				real lap = cap_coef*codim1LapSPH<decltype(xt_f),d>(
+			auto phi = [cap_coef, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, g_ptr, vol_ptr, h_ptr, xt_f, t_kernel, f_ptr, gm_ptr] __device__ __host__(const int idx)->VecD {
+				real lap = cap_coef * codim1LapSPH<decltype(xt_f), d>(
 					idx,
 					nbs_num_ptr[idx],
 					nbs_ptr_ptr[idx],
@@ -475,9 +496,11 @@ namespace zq{ namespace physics{
 					h_ptr,
 					xt_f,
 					t_kernel
-				);
+					);
 				return  f_ptr[idx] + (vol_ptr[idx] * gm_ptr[idx] / h_ptr[idx]) * e_ptr[idx].col(d - 1) * lap;
-			}
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
 			, f
 				);
 		}
@@ -488,8 +511,7 @@ namespace zq{ namespace physics{
 				VecD returnV = u_ij - dot(u_ij, e_ptr[i].col(d - 1)) * e_ptr[i].col(d - 1);
 				return returnV;
 			};
-			zq::utils::Calc_Each(
-				[f_ptr, vol_ptr, mu, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, g_ptr,  h_ptr, uij_f, t_kernel] __device__ __host__(const int idx)->VecD {
+			auto phi = [f_ptr, vol_ptr, mu, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, g_ptr, h_ptr, uij_f, t_kernel] __device__ __host__(const int idx)->VecD {
 				return  f_ptr[idx] + (vol_ptr[idx] * mu) *
 					codim1LapSPH<decltype(uij_f), d>(
 						idx,
@@ -502,33 +524,36 @@ namespace zq{ namespace physics{
 						h_ptr,
 						uij_f,
 						t_kernel
-					);
-			}
-			, f
-				);
+						);
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
+				, f
+			);
 		}
 		void updateVelocity(real dt) {
 			TransferToLocal();
-			zq::utils::Calc_Each(
-				[f_ptr, v_ptr, m_ptr, dt] __device__ __host__(const int idx)->VecD {
+			auto phi = [f_ptr, v_ptr, m_ptr, dt] __device__ __host__(const int idx)->VecD {
 				return v_ptr[idx] + (f_ptr[idx] / m_ptr[idx]) * dt;
-			}
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
 			, v
 				);
 		}
 		void updatePosition(real dt) {
 			TransferToLocal();
-			zq::utils::Calc_Each(
-				[x_ptr, v_ptr, dt] __device__ __host__(const int idx)->VecD {
+			auto phi = [x_ptr, v_ptr, dt] __device__ __host__(const int idx)->VecD {
 				return x_ptr[idx] + v_ptr[idx] * dt;
-			}
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
 			, x
 				);
 		}
 		void updateFrame(real dt) {
 			TransferToLocal();
-			zq::utils::Calc_Each(
-				[nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, v_r] __device__ __host__(const int idx)->MatD {
+			auto phi = [nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, v_r] __device__ __host__(const int idx)->MatD {
 				return framePCA<d>(
 					idx,
 					nbs_num_ptr[idx],
@@ -536,30 +561,32 @@ namespace zq{ namespace physics{
 					x_ptr,
 					e_ptr,
 					v_r
-				);
-			}
+					);
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
 			, e
 				);
 		}
 		void updateG(real dt) {
 			TransferToLocal();
-			zq::utils::Calc_Each(
-				[nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr] __device__ __host__(const int idx)->MatT {
+			auto phi = [nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr] __device__ __host__(const int idx)->MatT {
 				return calculateTensor<d>(
 					idx,
 					nbs_num_ptr[idx],
 					nbs_ptr_ptr[idx],
 					x_ptr,
 					e_ptr
-				);
-			}
+					);
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
 			, g
 				);
 		}
 		void updateH(real dt) {
 			TransferToLocal();
-			zq::utils::Calc_Each(
-				[nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, vol_ptr, t_kernel] __device__ __host__(const int idx)->real {
+			auto phi = [nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, vol_ptr, t_kernel] __device__ __host__(const int idx)->real {
 				return codim1HeightSPH<d>(
 					idx,
 					nbs_num_ptr[idx],
@@ -568,32 +595,16 @@ namespace zq{ namespace physics{
 					e_ptr,
 					vol_ptr,
 					t_kernel
-				);
-			}
+					);
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
 			, h
 				);
 		}
 		void updateVol(real dt) {
 			TransferToLocal();
-			zq::utils::Calc_Each(
-				[h_ptr, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, t_kernel] __device__ __host__(const int idx)->real {
-				return h_ptr[idx] * codim1AreaSPH<d>(
-					idx,
-					nbs_num_ptr[idx],
-					nbs_ptr_ptr[idx],
-					x_ptr,
-					e_ptr,
-					t_kernel
-				);
-			}
-			, vol
-				);
-		}
-		void updateInitVol(real dt) {
-			TransferToLocal();
-			/// First, find the initial 
-			zq::utils::Calc_Each(
-				[h_ptr, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, t_kernel] __device__ __host__(const int idx)->real {
+			auto phi = [h_ptr, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, t_kernel] __device__ __host__(const int idx)->real {
 				return h_ptr[idx] * codim1AreaSPH<d>(
 					idx,
 					nbs_num_ptr[idx],
@@ -602,15 +613,34 @@ namespace zq{ namespace physics{
 					e_ptr,
 					t_kernel
 					);
-			}
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
+			, vol
+				);
+		}
+		void updateInitVol(real dt) {
+			TransferToLocal();
+			/// First, find the initial 
+			auto vol_phi = [h_ptr, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, t_kernel] __device__ __host__(const int idx)->real {
+				return h_ptr[idx] * codim1AreaSPH<d>(
+					idx,
+					nbs_num_ptr[idx],
+					nbs_ptr_ptr[idx],
+					x_ptr,
+					e_ptr,
+					t_kernel
+					);
+			};
+			zq::utils::Calc_Each<decltype(vol_phi),side>(
+				vol_phi
 			, vol
 			);
 			/// Then iter;
 			int iter_num = 1000; real eta = 0.00001;
 			for (int i = 0; i < iter_num; i++) {
 				Array<real,side> tem_h(h.size());
-				zq::utils::Calc_Each(
-					[nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, vol_ptr, t_kernel] __device__ __host__(const int idx)->real {
+				auto tem_h_phi = [nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, vol_ptr, t_kernel] __device__ __host__(const int idx)->real {
 					return codim1HeightSPH<d>(
 						idx,
 						nbs_num_ptr[idx],
@@ -620,7 +650,9 @@ namespace zq{ namespace physics{
 						vol_ptr,
 						t_kernel
 						);
-				}
+				};
+				zq::utils::Calc_Each<decltype(tem_h_phi),side>(
+					tem_h_phi
 				, tem_h
 			   );
 #ifdef  RESEARCHP_ENABLE_CUDA
@@ -628,45 +660,30 @@ namespace zq{ namespace physics{
 #else
 				auto tem_h_ptr = &tem_h[0];
 #endif
-				zq::utils::Calc_Each(
-					[eta,nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, h_ptr, vol_ptr, t_kernel, tem_h_ptr] __device__ __host__(const int idx)->real {
-					    //printf("init:%f\t", vol_ptr[idx]);
-						return codim1VolIterSPH<d>(
-							idx,
-							nbs_num_ptr[idx],
-							nbs_ptr_ptr[idx],
-							x_ptr,
-							e_ptr,
-							h_ptr,
-							tem_h_ptr,
-							eta,
-							t_kernel
-						)+vol_ptr[idx];
-					}
+				auto iter_phi = [eta, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, h_ptr, vol_ptr, t_kernel, tem_h_ptr] __device__ __host__(const int idx)->real {
+					//printf("init:%f\t", vol_ptr[idx]);
+					return codim1VolIterSPH<d>(
+						idx,
+						nbs_num_ptr[idx],
+						nbs_ptr_ptr[idx],
+						x_ptr,
+						e_ptr,
+						h_ptr,
+						tem_h_ptr,
+						eta,
+						t_kernel
+						) + vol_ptr[idx];
+				};
+				zq::utils::Calc_Each<decltype(iter_phi),side>(
+					iter_phi
 					, vol
 				 );
 			}
-			Array<real, side> tem_h(h.size());
-			zq::utils::Calc_Each(
-				[nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, vol_ptr, t_kernel] __device__ __host__(const int idx)->real {
-				return codim1HeightSPH<d>(
-					idx,
-					nbs_num_ptr[idx],
-					nbs_ptr_ptr[idx],
-					x_ptr,
-					e_ptr,
-					vol_ptr,
-					t_kernel
-					);
-			}
-			, tem_h
-				);
 			Info("Finish Init Vol!");
 		}
 		void updateInitS(real dt) {
 			TransferToLocal();
-			zq::utils::Calc_Each(
-				[nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, t_kernel] __device__ __host__(const int idx)->real {
+			auto phi = [nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, t_kernel] __device__ __host__(const int idx)->real {
 				return codim1AreaSPH<d>(
 					idx,
 					nbs_num_ptr[idx],
@@ -674,26 +691,30 @@ namespace zq{ namespace physics{
 					x_ptr,
 					e_ptr,
 					t_kernel
-				);
-			}
+					);
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi	
 			, s
 				);
 		}
 		void updateS(real dt) {
 			TransferToLocal();
-			zq::utils::Calc_Each(
-				[vol_ptr,h_ptr] __device__ __host__(const int idx)->real {
+			auto phi = [vol_ptr, h_ptr] __device__ __host__(const int idx)->real {
 				return vol_ptr[idx] / h_ptr[idx];
-			}
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
 			, s
 		);
 		}
 		void updateM(real dt) {
 			TransferToLocal();
-			zq::utils::Calc_Each(
-				[vol_ptr,rho] __device__ __host__(const int idx)->real {
+			auto phi = [vol_ptr, rho] __device__ __host__(const int idx)->real {
 				return vol_ptr[idx] * rho;
-			}
+			};
+			zq::utils::Calc_Each<decltype(phi),side>(
+				phi
 			, m
 				);
 		}
