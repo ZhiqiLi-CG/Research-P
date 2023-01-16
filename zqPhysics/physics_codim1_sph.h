@@ -76,9 +76,9 @@ namespace zq{ namespace physics{
 	/// Calculate the volume of a bubble
 	template<int d,int side>
 	real calculateVolume(
-		Array<Vec<real,d>,side> x,
-		Array<Mat<real,d>, side> e,
-		Array<real,side> s
+		const Array<Vec<real,d>,side>& x,
+		const Array<Mat<real,d>, side>& e,
+		const Array<real,side>& s
 	) {
 		real dd = d;
 		Array<real> temp(x.size());
@@ -152,6 +152,33 @@ namespace zq{ namespace physics{
 			phi_real += vol[j] * sph_kernel->Weight<d - 1>(coord.Length(), kernel_type);
 		}
 		return phi_real;
+	}
+
+	template<int d>
+#ifdef  RESEARCHP_ENABLE_CUDA
+	__host__ __device__
+#endif
+		real codim1VolIterSPH(
+			int i,
+			int nbs_num,
+			int* nbs,
+			Vec<real, d>* x,
+			Mat<real, d>* e,
+			real* th,
+			real* ch,
+			real eta,
+			SPHKernel* sph_kernel,
+			SPH_Kernel_Type kernel_type = SPH_Kernel_Type::SPIKY_SPH_KERNEL
+		) {
+		real delta_vol = 0;
+		for (int k = 0; k < nbs_num; k++) {
+			int j = nbs[k];
+			Vec<real, d> r_ij = x[i] - x[j];
+			Vec<real, d - 1> coord = projectPlane<d>(r_ij, e[i]);
+			delta_vol += eta*(th[i]-ch[i]) * sph_kernel->Weight<d - 1>(coord.Length(), kernel_type);
+		}
+		//printf("delta:%f\t", delta_vol);
+		return delta_vol;
 	}
 
 	template<int d>
@@ -460,6 +487,10 @@ namespace zq{ namespace physics{
 				data[3 * i + 2] = phi(nb);
 			}
 		}
+		//for (int i = 0; i < 3 * nbs_num; i+=3) {
+		//	printf("%f %f %f\n", data[i], data[i + 1], data[i + 2]);
+		//}
+		
 		if constexpr (d == 2) {
 			Vec<real, d> zero;
 			zq::fitMovingLeastSquare2D<real>(coef, data, nbs_num,&(zero[0]));

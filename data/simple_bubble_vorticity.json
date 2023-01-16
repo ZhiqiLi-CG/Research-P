@@ -1,0 +1,27 @@
+{
+  "bubble_radius": 1,
+  "const_value": {
+    "alpha_c": 1e1,
+    "alpha_d": 0,
+    "alpha_h": 5e1,
+    "alpha_k": 1e-2,
+    "gamma_0": 7.275e-2,
+    "gamma_a": 2479,
+    "gravity": 0,
+    "h_0": 7.8e-7,
+    "mu": 8.9e0,
+    "p_0": 10132.5,
+    "rho": 1,
+    "t_dot": 0.2,
+    "t_r": 0.15,
+    "v_r": 0.15,
+    "cap_coef": 0
+  },
+  "frame_rate": 20000,
+  "last_frame": 100000,
+  "output_dir": "output/simple_bubble_vorticity",
+  "snapshot_stride": 1,
+  "stop_dx": 0.06,
+  "transparent": 0.5,
+  "test": 2
+}

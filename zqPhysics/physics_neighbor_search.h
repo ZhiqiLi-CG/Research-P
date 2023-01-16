@@ -91,6 +91,7 @@ namespace zq{ namespace physics{
 
 		void updatePoints(Array<VecD>& points) {
 			this->points = points;
+			hash_table.clear();
 			for (int i = 0; i < points.size(); i++) {
 				VecDi cell = grid.getCell(points[i]);
 				int cellID = grid.getCellId(cell);

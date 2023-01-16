@@ -36,7 +36,7 @@ namespace zq{ namespace physics{
 		auto gravity= this->gravity;auto gravity_vec= this->gravity_vec;auto gamma_0 = this->gamma_0;auto gamma_a = this->gamma_a;\
 		auto alpha_h = this->alpha_h;auto alpha_k = this->alpha_k;auto alpha_d = this->alpha_d;auto alpha_c = this->alpha_c;\
 		auto h_0 = this->h_0;auto p_0 =this->p_0;auto mu = this->mu;auto vol_0 = this->vol_0;\
-		auto vol_b = this->vol_b;auto t_kernel=this->t_kernel;\
+		auto vol_b = this->vol_b;auto t_kernel=this->t_kernel;auto cap_coef=this->cap_coef;\
 		auto x_ptr = this->x_ptr;auto v_ptr = this->v_ptr;auto f_ptr = this->f_ptr;auto m_ptr = this->m_ptr;\
 		auto h_ptr = this->h_ptr;auto vol_ptr = this->vol_ptr;auto s_ptr = this->s_ptr;auto e_ptr = this->e_ptr;\
 		auto g_ptr = this->g_ptr;auto ah_ptr = this->ah_ptr;auto gm_ptr = this->gm_ptr;auto GM_ptr = this->GM_ptr;\
@@ -58,6 +58,7 @@ namespace zq{ namespace physics{
 		real h_0 = 6e-7;											// rest thickness of the film 
 		real p_0 = 10132.5;											// the standard atmospheric pressure
 		real mu = 8.9e-4;											// used when calculate viscosity force
+		real cap_coef = 1;
 		real vol_0 = 1e1;											// the volume at the beginning
 		real vol_b = 1e1;
 		SPHKernel* t_kernel;												////tangential SPH kernel
@@ -107,6 +108,7 @@ namespace zq{ namespace physics{
 				{"p_0", &p_0},
 				{"mu", &mu},
 				{"rho", &rho},
+				{"cap_coef",&cap_coef}
 			};
 			key_array = std::unordered_map<std::string, void*>{
 				{"x",(void*)&x},
@@ -144,11 +146,15 @@ namespace zq{ namespace physics{
 			nbs.resize(x.size());
 			updateNb(MaxPosition, MinPosition);
 			getPtr();
-			updateVol(0);  printRealArray<side>(vol, "Init Vol", false);
+			// Vol ?
+			// S -> Vol 
+//			updateVol(0); 
+			updateInitVol(0);  printRealArray<side>(vol, "Init Vol", false);
 			updateM(0);  printRealArray<side>(m, "Init Mass", false);
-			updateInitS(0);
+			updateS(0);
 			vol_0 = vol_b = calculateVolume<d,side>(x, e, s);
 			updateG(0);
+			printf("P");
 		}
 		void update(real dt) {
 			getPtr();
@@ -163,16 +169,16 @@ namespace zq{ namespace physics{
 			updateAdvectedHeight(dt); printRealArray<side>(ah, "test ah", false);
 			updateVorticity(dt); printRealArray<side>(vo, "test Vo", false);
 			updateConcentration(dt); printRealArray<side>(GM, "test Con", false);
-			/*
+			
 			updateExternalForce(dt); printVecArray<side,d>(f, "test externa force", false);
 			updateVorticityForce(dt); printVecArray<side, d>(f, "test VorticityForce", false);
 			updatePressureForce(dt); printVecArray<side, d>(f, "test PressureForce", false);
 			updateMarangoniForce(dt); printVecArray<side, d>(f, "test Maran Force", false);
 			updateCapillaryForces(dt); printVecArray<side, d>(f, "test CapillaryForces", false);
 			updateViscosityForces(dt); printVecArray<side, d>(f, "test ViscosityForces", false);
-			*/
-			updateVelocity(dt); printVecArray<side, d>(v, "test velocity", true);
-			updatePosition(dt); printVecArray<side, d>(x, "test Position", true);
+			
+			updateVelocity(dt); printVecArray<side, d>(v, "test velocity", false);
+			updatePosition(dt); printVecArray<side, d>(x, "test Position", false);
 			updateNb(); printArrayArray<side>(nbs, "test nbs", false);
 
 			updateFrame(dt); printMatArray<side, d>(e, "test frame", false);
@@ -284,6 +290,7 @@ namespace zq{ namespace physics{
 					nbs_num_ptr,
 					t_kernel
 				);
+				///printf("k:%f\t", k);
 				return alpha_h * (h_ptr[idx] / h_0 - 1) + alpha_k * gm_ptr[idx] * k + alpha_d *
 					calculateDiv<d>(
 						idx,
@@ -378,7 +385,8 @@ namespace zq{ namespace physics{
 			zq::utils::Calc_Each(
 				[vol_0, vol_b, p_0, f_ptr, m_ptr, gravity_vec, s_ptr, e_ptr]__device__ __host__(const int idx)->VecD {
 				real p_b = (vol_0 / vol_b) * p_0;
-				VecD newForce = f_ptr[idx] + m_ptr[idx] * gravity_vec + (p_b - p_0) * s_ptr[idx] * (e_ptr[idx]).col(d - 1) / 1000;
+				//printf("%f %f %f\n,",p_0,p_b, (p_b - p_0) * s_ptr[idx] / 1000000);
+				VecD newForce = f_ptr[idx] + m_ptr[idx] * gravity_vec +(p_b - p_0) * s_ptr[idx] * (e_ptr[idx]).col(d - 1) / 1000;
 				return newForce;
 			}
 			, f
@@ -455,8 +463,8 @@ namespace zq{ namespace physics{
 				return value;
 			};
 			zq::utils::Calc_Each(
-				[nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, g_ptr, vol_ptr, h_ptr, xt_f, t_kernel, f_ptr, gm_ptr] __device__ __host__(const int idx)->VecD {
-				real lap = codim1LapSPH<decltype(xt_f),d>(
+				[cap_coef,nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, g_ptr, vol_ptr, h_ptr, xt_f, t_kernel, f_ptr, gm_ptr] __device__ __host__(const int idx)->VecD {
+				real lap = cap_coef*codim1LapSPH<decltype(xt_f),d>(
 					idx,
 					nbs_num_ptr[idx],
 					nbs_ptr_ptr[idx],
@@ -581,6 +589,80 @@ namespace zq{ namespace physics{
 			, vol
 				);
 		}
+		void updateInitVol(real dt) {
+			TransferToLocal();
+			/// First, find the initial 
+			zq::utils::Calc_Each(
+				[h_ptr, nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, t_kernel] __device__ __host__(const int idx)->real {
+				return h_ptr[idx] * codim1AreaSPH<d>(
+					idx,
+					nbs_num_ptr[idx],
+					nbs_ptr_ptr[idx],
+					x_ptr,
+					e_ptr,
+					t_kernel
+					);
+			}
+			, vol
+			);
+			/// Then iter;
+			int iter_num = 1000; real eta = 0.00001;
+			for (int i = 0; i < iter_num; i++) {
+				Array<real,side> tem_h(h.size());
+				zq::utils::Calc_Each(
+					[nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, vol_ptr, t_kernel] __device__ __host__(const int idx)->real {
+					return codim1HeightSPH<d>(
+						idx,
+						nbs_num_ptr[idx],
+						nbs_ptr_ptr[idx],
+						x_ptr,
+						e_ptr,
+						vol_ptr,
+						t_kernel
+						);
+				}
+				, tem_h
+			   );
+#ifdef  RESEARCHP_ENABLE_CUDA
+				auto tem_h_ptr = thrust::raw_pointer_cast(&tem_h[0]);
+#else
+				auto tem_h_ptr = &tem_h[0];
+#endif
+				zq::utils::Calc_Each(
+					[eta,nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, h_ptr, vol_ptr, t_kernel, tem_h_ptr] __device__ __host__(const int idx)->real {
+					    //printf("init:%f\t", vol_ptr[idx]);
+						return codim1VolIterSPH<d>(
+							idx,
+							nbs_num_ptr[idx],
+							nbs_ptr_ptr[idx],
+							x_ptr,
+							e_ptr,
+							h_ptr,
+							tem_h_ptr,
+							eta,
+							t_kernel
+						)+vol_ptr[idx];
+					}
+					, vol
+				 );
+			}
+			Array<real, side> tem_h(h.size());
+			zq::utils::Calc_Each(
+				[nbs_num_ptr, nbs_ptr_ptr, x_ptr, e_ptr, vol_ptr, t_kernel] __device__ __host__(const int idx)->real {
+				return codim1HeightSPH<d>(
+					idx,
+					nbs_num_ptr[idx],
+					nbs_ptr_ptr[idx],
+					x_ptr,
+					e_ptr,
+					vol_ptr,
+					t_kernel
+					);
+			}
+			, tem_h
+				);
+			Info("Finish Init Vol!");
+		}
 		void updateInitS(real dt) {
 			TransferToLocal();
 			zq::utils::Calc_Each(
@@ -623,7 +705,6 @@ namespace zq{ namespace physics{
 			Array<int>& nbs
 		) {
 			auto cond = [&](int j) {
-				return true;
 				return isTangNeighbor(x_host[i], e_host[i], x_host[j], e_host[j], t_r, t_dot);
 			};
 			nbs_searcher.findNbs(x_host[i], nbs, cond);
@@ -637,10 +718,10 @@ namespace zq{ namespace physics{
 			real t_dot
 		) {
 			////check angle
-			VecD n = e0.col(d - 1);
-			VecD n_p = e.col(d - 1);
-			real angle = dot(n,n_p);
-			if (angle < t_dot) return false;	////skip the points with large angles
+			//VecD n = e0.col(d - 1);
+			//VecD n_p = e.col(d - 1);
+			//real angle = dot(n,n_p);
+			//if (angle < t_dot) return false;	////skip the points with large angles
 			////check distance
 			VecD u = pos - pos0;
 			VecT t = projectPlane<d>(u, e0);

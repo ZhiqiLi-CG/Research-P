@@ -21,6 +21,7 @@
 #include<ResearchP_config.h>
 #include<zqPhysics/physics_sph_kernel.h>
 #include <zqBasicUtils/utils_array_func.h>
+#include<zqBasicMath/math_utils.h>
 #include <queue>
 namespace zq{ namespace physics{
 	/// Only 3D is available, 2D:TODO
@@ -43,6 +44,11 @@ namespace zq{ namespace physics{
 			dx = splitTriagle(radius, stop_dx, points, triangles);
 			V = 4 * radius * radius * ZQ_PI;
 			S = V / points.size();
+			real randA = 0.2;
+			for (int i = 0; i < points.size(); i++) {
+				points[i] += stop_dx * VecD(zq::randNumber(-randA, randA), zq::randNumber(-randA, randA), zq::randNumber(-randA, randA));
+				points[i] = points[i] / points[i].Length() * radius;
+			}
 			for (int i = 0; i < points.size(); i++) {
 				normals.push_back(points[i].Normalize());
 			}
@@ -68,10 +74,13 @@ namespace zq{ namespace physics{
 				return false;
 			return true;
 		}
-		static VecD midArc(VecD a, VecD b)
+		static VecD midArc(VecD a, VecD b,real randA=0.00)
 		{
-			VecD c(a[0] + b[0], a[1] + b[1], a[2] + b[2]);
+			real ratio = 0.5 + zq::randNumber(-randA,randA);
+			VecD c=a*ratio+b*(1-ratio);
 			return c / c.Length() * a.Length();
+//			VecD c(a[0] + b[0], a[1] + b[1], a[2] + b[2]);
+//			return c / c.Length() * a.Length();
 		}
 		static int find_pair(std::unordered_map<long long, int>& pairs, int x, int y, int id) {
 			long long pair;
