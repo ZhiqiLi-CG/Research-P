@@ -2,7 +2,15 @@ cmake_minimum_required (VERSION 3.2)
 
 message("This CMakeList.txt is written for 64bit system only")
 
-project (ResearchPExamples LANGUAGES CXX)
+include(ResearchP/ResearchP.cmake)
+Set_ResearchP_Options()
+
+if(CUDA_ENABLE)	
+	project (ResearchPExamples LANGUAGES CXX CUDA)
+else()
+	project (ResearchPExamples LANGUAGES CXX)	
+endif()
+
 set(ResearchP_ROOT_DIR ${CMAKE_SOURCE_DIR})
 
 
@@ -43,12 +51,19 @@ configure_file(
 	@ONLY)
 message(STATUS "${PROJECT_BINARY_DIR}/physics_path.h created,\n DATA_PATH=${PHYSICS_DATA_PATH}")
 
+set(MATH_DATA_PATH "${CMAKE_SOURCE_DIR}/Research-M/data")
+configure_file(
+	"${CMAKE_SOURCE_DIR}/Research-M/examples/math_data_path.h.in" 
+	"${PROJECT_BINARY_DIR}/math_data_path.h"
+	@ONLY)
+	
 ###############################################
 # Options and config
 ###############################################
-include(ResearchP/ResearchP.cmake)
-include_directories(${ResearchP_INCLUDE_DIRS})
+
 Set_ResearchP_Env()
+include_directories(${ResearchP_INCLUDE_DIRS})
+
 
 ###############################################
 # Example Projects

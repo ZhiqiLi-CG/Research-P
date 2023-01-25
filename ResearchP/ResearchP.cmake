@@ -6,10 +6,17 @@ set(ResearchP_INCLUDE_DIRS
 	${zqPhysics_INCLUDE_DIRS}
 	${PROJECT_BINARY_DIR})
 	
-macro(Set_ResearchP_Env)
+macro(Set_ResearchP_Options)
 	#----------- Set Option-------
 	option(CUDA_ENABLE "whether use cuda" OFF)
 
+endmacro()
+	
+macro(Set_ResearchP_Env)
+	set(ResearchP_INCLUDE_DIRS
+		${ResearchP_INCLUDE_DIR}
+		${zqPhysics_INCLUDE_DIRS}
+		${PROJECT_BINARY_DIR})
 	# ---------- CUDA ----------
 	if(CUDA_ENABLE)
 		find_package(CUDA  REQUIRED)

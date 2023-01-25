@@ -1,6 +1,6 @@
 #include <iostream>
-#ifndef __Main_cpp__
-#define __Main_cpp__
+#include<ResearchP_config.h>
+#ifdef  RESEARCHP_ENABLE_CUDA
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <cuda_runtime.h>
@@ -8,10 +8,6 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 #include <thrust/host_vector.h>
-#include "Eigen/Dense"
-#include "Eigen/Geometry"
-#include "Common.h"
-#include "GeometryInit.h"
 /*
 template<class T,int d1, int d2>
 class MyMatrix {
@@ -211,17 +207,6 @@ public:
 };
 int main(int argc,char* argv[])
 {
-	Typedef_VectorDii(3)
-	InitSphere sphere(1, 0.1);
-	Particles<3, DEVICE> particles;
-	particles.initParameter(std::unordered_map<std::string, real>());
-	particles.initAttribute(
-		sphere.points, sphere.v, sphere.m,
-		sphere.h, sphere.normals, sphere.Vol,
-		sphere.GM, sphere.vo, sphere.maxPosition,
-		sphere.minPosition
-	);
-	particles.updateG();
 
 	DDD d;
 	d.f();
@@ -229,8 +214,6 @@ int main(int argc,char* argv[])
 	tem.g();
 	tem.f();
 	tem.g();
-	using namespace ACG;
-	Typedef_VectorDii(3);
 	thrust::device_vector<BBB> BBBB(10000);
 	thrust::counting_iterator<int> idxfirst(0);
 	thrust::counting_iterator<int> idxlast = idxfirst + BBBB.size();
@@ -273,9 +256,6 @@ int main(int argc,char* argv[])
 		}
 	);
 	*/
-	Eigen::Matrix2d a;
-	a << 1, 2, 3, 4;
-	std::cout << a << std::endl;
 }
 
 #endif
